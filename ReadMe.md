@@ -8,12 +8,12 @@ This repo contains all the source codes of experiments and tools.
 徐辉(xuh@fdu.edu.cn).
 
 ### Directory Struct
-./
-  experiments
-    DeObfs
-      DSN2018 //a modified angr which can detect the symbolic addressing opaque predicate
-      ACSAC2019 //a python script, deobfs the FOR Obfs
-    Z3-Solver
-      Factoring
-  tools
-    ObfsPass //a llvm pass, can generate obfuscated code
+./ <br/>
+  experiments <br/>
+    DeObfs <br/>
+      DSN2018 //a modified angr which can detect the symbolic addressing opaque predicate <br/>
+      ACSAC2019 //a python script, deobfs the FOR Obfs <br/>
+    Z3-Solver <br/>
+      Factoring <br/>
+  tools <br/>
+    ObfsPass //a llvm pass, can generate obfuscated code <br/>
