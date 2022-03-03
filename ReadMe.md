@@ -1,7 +1,7 @@
 ### Intro
 This repo contains all the source codes of experiments and tools.
 
-程瑞(chengrui0@stu.xjtu.edu.cn, wwww.crsec.work)
+程瑞(chengrui0@stu.xjtu.edu.cn, crsec.work)
 
 范铭(mingfan@xjtu.edu.cn)
 
