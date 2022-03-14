@@ -10,12 +10,12 @@
 #include "llvm/IR/InstrTypes.h"
 #include <random>
 
-#define OPEN_SYMBOLIC_MEMORY_SNIPPET 0
-#define OPEN_FACTOR_OPAQUE_PREDICATE 0
+#define OPEN_SYMBOLIC_MEMORY_SNIPPET 1
+#define OPEN_FACTOR_OPAQUE_PREDICATE 1
 #define OPEN_CRYPTO_OPAQUE_PREDICATE 1
-#define OPEN_LOOP_OPAQUE_PREDICATE 0
+#define OPEN_LOOP_OPAQUE_PREDICATE 1
 
-#define OPEN_MEMORY_DETAINT 0
+#define OPEN_MEMORY_DETAINT 1
 
 #define EACH_BLOCK_ONLY_ONE_OBFS 1
 
@@ -43,10 +43,12 @@ const uint32_t primerNumber[] = {2147483659, 2147483693, 2147483713, 2147483743,
 };
 
 static uint32_t ror(uint32_t r, uint32_t v) {
+    v %= 32;
     return (r >> v) | (r << (32 - v));
 }
 
 static uint32_t rol(uint32_t r, uint32_t v) {
+    v %= 32;
     return (r << v) | (r >> (32 - v));
 }
 
@@ -56,11 +58,10 @@ static std::vector<CryptoPrimitive> createPrimitiveFunction(int len1, int len2, 
     if (extend) {
         function.push_back(CryptoPrimitive());
         function[0].crypt = EXTEND;
-        function[0].a1 = rand();
-        function[0].b1 = (function[0].a1 + rand()) % 4;
+        function[0].a1 = 1 + rand() % 3;
+        function[0].b1 = 1 + rand() % 3;
         if (function[0].a1 == function[0].b1) {
-            function[0].b1++;
-            function[0].b1 %= 4;
+            function[0].b1 == function[0].a1 == 1 ? 2 : 1;
         }
     }
 
@@ -87,23 +88,23 @@ static std::vector<CryptoPrimitive> createPrimitiveFunction(int len1, int len2, 
             function.push_back(CryptoPrimitive());
             switch (rand() % 5) {
                 case 0:
-                    function[function.size() - 1].ext1 = ATF;
-                    function[function.size() - 1].a2 = rand() | 1;
-                    function[function.size() - 1].b2 = rand();
+                    function[function.size() - 1].crypt = ATF;
+                    function[function.size() - 1].a1 = rand() | 1;
+                    function[function.size() - 1].b1 = rand();
                     break;
                 case 1:
-                    function[function.size() - 1].ext1 = LSL;
-                    function[function.size() - 1].a2 = rand() % 32;
+                    function[function.size() - 1].crypt = LSL;
+                    function[function.size() - 1].a1 = rand() % 32;
                     break;
                 case 2:
-                    function[function.size() - 1].ext1 = LSR;
-                    function[function.size() - 1].a2 = rand() % 32;
+                    function[function.size() - 1].crypt = LSR;
+                    function[function.size() - 1].a1 = rand() % 32;
                     break;
                 case 3:
-                    function[function.size() - 1].ext1 = DDR;
+                    function[function.size() - 1].crypt = DDR;
                     break;
                 case 4:
-                    function[function.size() - 1].ext1 = DDL;
+                    function[function.size() - 1].crypt = DDL;
             }
         }
     }
@@ -117,15 +118,16 @@ static Value *genPrimitiveFunction(IRBuilder<> irb, Value *v, std::vector<Crypto
     }
 
     if (v->getType()->isIntegerTy(32)) {
-        function = createPrimitiveFunction(4 + rand() % 3, rand() % 3, true);
+        function = createPrimitiveFunction(4 + rand() % 3, rand() % 3 + 4, true);
     }
     else if (v->getType()->isIntegerTy(64)) {
-        function = createPrimitiveFunction(4 + rand() % 3, rand() % 3, false);
+        function = createPrimitiveFunction(4 + rand() % 3, rand() % 3 + 4, false);
     }
     else {
         return NULL;
     }
     Value *a, *b;
+
     for (int i = 0; i < function.size(); i++) {
         switch (function[i].crypt) {
             case FEISTEL:
@@ -135,8 +137,10 @@ static Value *genPrimitiveFunction(IRBuilder<> irb, Value *v, std::vector<Crypto
                 switch (function[i].ext1) {
                     case ATF:
                         c = irb.CreateAdd(irb.CreateMul(b, irb.getInt32(function[i].a2)), irb.getInt32(function[i].b2));
+                        break;
                     case LSL:
                         c = irb.CreateXor(b, irb.CreateShl(b, function[i].a2));
+                        break;
                     case LSR:
                         c = irb.CreateXor(b, irb.CreateLShr(b, function[i].a2));
                 }
@@ -150,8 +154,10 @@ static Value *genPrimitiveFunction(IRBuilder<> irb, Value *v, std::vector<Crypto
                 switch (function[i].ext1) {
                     case ATF:
                         c = irb.CreateAdd(irb.CreateMul(b, irb.getInt32(function[i].a2)), irb.getInt32(function[i].b2));
+                        break;
                     case LSL:
                         c = irb.CreateXor(b, irb.CreateShl(b, function[i].a2));
+                        break;
                     case LSR:
                         c = irb.CreateXor(b, irb.CreateLShr(b, function[i].a2));
                 }
@@ -160,7 +166,7 @@ static Value *genPrimitiveFunction(IRBuilder<> irb, Value *v, std::vector<Crypto
                 a = irb.CreateZExt(a, irb.getInt64Ty());
                 b = irb.CreateZExt(b, irb.getInt64Ty());
                 b = irb.CreateShl(b, 32);
-                v = irb.CreateOr(a, b);
+                v = irb.CreateAdd(a, b);
                 break;
             case ATF:
                 v = irb.CreateAdd(irb.CreateMul(v, irb.getInt64(function[i].a1)), irb.getInt64(function[i].b1));
@@ -174,49 +180,49 @@ static Value *genPrimitiveFunction(IRBuilder<> irb, Value *v, std::vector<Crypto
             case DDR:
                 a = irb.CreateIntCast(v, irb.getInt32Ty(), false);
                 b = irb.CreateIntCast(irb.CreateLShr(v, 32), irb.getInt32Ty(), false);
-                a = irb.CreateOr(irb.CreateLShr(irb.CreateAdd(a, b), b),
+                a = irb.CreateOr(irb.CreateLShr(irb.CreateAdd(a, b), irb.CreateURem(b, irb.getInt32(32))),
                                  irb.CreateShl(irb.CreateAdd(a, b),
                                                irb.CreateSub(irb.getInt32(32),
                                                              irb.CreateURem(b, irb.getInt32(32)))));
-                b = irb.CreateOr(irb.CreateLShr(irb.CreateAdd(a, b), a),
+                b = irb.CreateOr(irb.CreateLShr(irb.CreateAdd(a, b), irb.CreateURem(a, irb.getInt32(32))),
                                  irb.CreateShl(irb.CreateAdd(a, b),
                                                irb.CreateSub(irb.getInt32(32),
                                                              irb.CreateURem(a, irb.getInt32(32)))));
                 a = irb.CreateZExt(a, irb.getInt64Ty());
                 b = irb.CreateZExt(b, irb.getInt64Ty());
                 b = irb.CreateShl(b, 32);
-                v = irb.CreateOr(a, b);
+                v = irb.CreateAdd(a, b);
                 break;
             case DDL:
                 a = irb.CreateIntCast(v, irb.getInt32Ty(), false);
                 b = irb.CreateIntCast(irb.CreateLShr(v, 32), irb.getInt32Ty(), false);
-                a = irb.CreateOr(irb.CreateShl(irb.CreateAdd(a, b), b),
+                a = irb.CreateOr(irb.CreateShl(irb.CreateAdd(a, b), irb.CreateURem(b, irb.getInt32(32))),
                                  irb.CreateLShr(irb.CreateAdd(a, b),
                                                irb.CreateSub(irb.getInt32(32),
                                                              irb.CreateURem(b, irb.getInt32(32)))));
-                b = irb.CreateOr(irb.CreateShl(irb.CreateAdd(a, b), a),
+                b = irb.CreateOr(irb.CreateShl(irb.CreateAdd(a, b), irb.CreateURem(a, irb.getInt32(32))),
                                  irb.CreateLShr(irb.CreateAdd(a, b),
                                                irb.CreateSub(irb.getInt32(32),
                                                              irb.CreateURem(a, irb.getInt32(32)))));
                 a = irb.CreateZExt(a, irb.getInt64Ty());
                 b = irb.CreateZExt(b, irb.getInt64Ty());
                 b = irb.CreateShl(b, 32);
-                v = irb.CreateOr(a, b);
+                v = irb.CreateAdd(a, b);
                 break;
             case EXTEND:
                 v = irb.CreateZExt(v, irb.getInt64Ty());
                 int i1, i2;
                 i1 = function[i].a1;
                 i2 = function[i].b1;
-                for (int j = 0; j < 4; j++) {
+                for (int j = 4; j < 8; j++) {
                     int n1, n2;
-                    n1 = j + 4 - i1;
-                    n2 = j + 4 - i2;
+                    n1 = j - i1;
+                    n2 = j - i2;
                     Value *a1 = irb.CreateLShr(v, n1 * 8);
                     Value *a2 = irb.CreateLShr(v, n2 * 8);
                     Value *a3 = irb.CreateXor(a1, a2);
                     a3 = irb.CreateAnd(a3, irb.getInt64(0xFF));
-                    a3 = irb.CreateShl(a3, (j + 4) * 8);
+                    a3 = irb.CreateShl(a3, j * 8);
                     v = irb.CreateOr(v, a3);
                 }
                 break;
@@ -228,7 +234,8 @@ static Value *genPrimitiveFunction(IRBuilder<> irb, Value *v, std::vector<Crypto
 static uint64_t calcPrimitiveFunction(std::vector<CryptoPrimitive> function, uint64_t v) {
     for (int i = 0; i < function.size(); i++) {
         uint32_t *a = (uint32_t *)&v;
-        uint32_t *b = a++;
+        uint32_t *b = a;
+        b++;
         uint32_t t;
         uint8_t *p = (uint8_t *)&v;
         switch (function[i].crypt) {
@@ -260,19 +267,19 @@ static uint64_t calcPrimitiveFunction(std::vector<CryptoPrimitive> function, uin
                 }
                 break;
             case ATF:
-                v = v * function[i].a1 + function[i].a2;
+                v = v * function[i].a1 + function[i].b1;
                 break;
             case DDR:
                 *a = ror(*a + *b, *b);
                 *b = ror(*a + *b, *a);
                 break;
             case DDL:
-                *a = ror(*a + *b, *b);
-                *b = ror(*a + *b, *a);
+                *a = rol(*a + *b, *b);
+                *b = rol(*a + *b, *a);
                 break;
             case EXTEND:
-                for (int i = 4; i < 8; i++) {
-                    p[i] = p[i - function[i].a1] ^ p[i - function[i].b1];
+                for (int j = 4; j < 8; j++) {
+                    p[j] = (p[j - function[i].a1] ^ p[j - function[i].b1]);
                 }
                 break;
             case LSR:
@@ -827,9 +834,7 @@ namespace {
             demote_reg_to_memory->runOnFunction(F);
 
             if (OPEN_CRYPTO_OPAQUE_PREDICATE) {
-                errs() << F;
                 insertCryptoOP(F);
-                errs() << F;
             }
 
             if (OPEN_FACTOR_OPAQUE_PREDICATE) {
