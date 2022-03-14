@@ -8,14 +8,18 @@
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/InstrTypes.h"
+#include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/LLVMContext.h"
 #include <random>
 
-#define OPEN_SYMBOLIC_MEMORY_SNIPPET 1
-#define OPEN_FACTOR_OPAQUE_PREDICATE 1
+#define OPEN_SYMBOLIC_MEMORY_SNIPPET 0
+#define OPEN_FACTOR_OPAQUE_PREDICATE 0
 #define OPEN_CRYPTO_OPAQUE_PREDICATE 1
-#define OPEN_LOOP_OPAQUE_PREDICATE 1
+#define OPEN_LOOP_OPAQUE_PREDICATE 0
 
-#define OPEN_MEMORY_DETAINT 1
+#define OPEN_MEMORY_DETAINT 0
+
+#define OPEN_DWARF 0
 
 #define EACH_BLOCK_ONLY_ONE_OBFS 1
 
@@ -76,11 +80,11 @@ static std::vector<CryptoPrimitive> createPrimitiveFunction(int len1, int len2, 
                 break;
             case 1:
                 function[function.size() - 1].ext1 = LSL;
-                function[function.size() - 1].a2 = rand() % 32;
+                function[function.size() - 1].a2 = 1 + rand() % 31;
                 break;
             case 2:
                 function[function.size() - 1].ext1 = LSR;
-                function[function.size() - 1].a2 = rand() % 32;
+                function[function.size() - 1].a2 = 1 + rand() % 31;
                 break;
         }
 
@@ -94,11 +98,11 @@ static std::vector<CryptoPrimitive> createPrimitiveFunction(int len1, int len2, 
                     break;
                 case 1:
                     function[function.size() - 1].crypt = LSL;
-                    function[function.size() - 1].a1 = rand() % 32;
+                    function[function.size() - 1].a1 = 1 + rand() % 31;
                     break;
                 case 2:
                     function[function.size() - 1].crypt = LSR;
-                    function[function.size() - 1].a1 = rand() % 32;
+                    function[function.size() - 1].a1 = 1 + rand() % 31;
                     break;
                 case 3:
                     function[function.size() - 1].crypt = DDR;
@@ -316,6 +320,11 @@ namespace {
 
         Obfuscation() : FunctionPass(ID) {}
 
+        void insertDWARF(Function &F) {
+            IRBuilder<> irb(&F.getEntryBlock());
+
+        }
+
         void insertFactorOP(Function &F) {
             for (BasicBlock &BB: F) {
                 for (Instruction &I: BB) {
@@ -483,8 +492,9 @@ namespace {
                     cmp_const = calcPrimitiveFunction(function, cmp_const);
                     I.setOperand(const_op, irb.getInt64(cmp_const));
                     I.setOperand(value_op, cmp_value);
-                    break;
+                    goto end;
                 }
+                end:;
             }
         }
 
@@ -826,6 +836,13 @@ namespace {
             }
         }
 
+        void insertDWARFCall(Function &F) {
+            BasicBlock &BB = F.getEntryBlock();
+            IRBuilder<> irb(&BB);
+            StringRef function_name("");
+
+        }
+
         bool runOnFunction(Function &F) override {
             srandom(time(NULL));
 
@@ -851,6 +868,10 @@ namespace {
 
             if (OPEN_MEMORY_DETAINT) {
                 insertMemoryAttackTaint(F);
+            }
+
+            if (OPEN_DWARF) {
+
             }
 
             return false;
